@@ -2,34 +2,41 @@ const WebSocket = require('ws');
 const PORT = process.env.PORT || 8080;
 const wss = new WebSocket.Server({ port: PORT });
 
-let cameraSocket = null;
-const viewers = new Set();
+// Store cameras and viewers mapped by pair_id
+const hubs = new Map(); // pair_id -> { camSocket: ws, viewers: Set }
 
 wss.on('connection', (ws, req) => {
   const urlParams = new URLSearchParams(req.url.split('?')[1]);
   const role = urlParams.get('role');
+  const pairId = urlParams.get('pair_id');
+
+  if (!pairId) {
+    ws.close();
+    return;
+  }
+
+  if (!hubs.has(pairId)) {
+    hubs.set(pairId, { camSocket: null, viewers: new Set() });
+  }
+  const hub = hubs.get(pairId);
 
   if (role === 'cam') {
-    cameraSocket = ws;
-    console.log('[+] ESP32-CAM Connected');
-    // Notify all viewers that camera is now online
-    for (const viewer of viewers) {
+    hub.camSocket = ws;
+    console.log(`[+] ESP32-CAM Connected for Hub: ${pairId}`);
+    for (const viewer of hub.viewers) {
       if (viewer.readyState === WebSocket.OPEN) {
         viewer.send(JSON.stringify({ status: 'cam_online' }));
       }
     }
   } else {
-    viewers.add(ws);
-    console.log('[+] Dashboard Viewer Connected');
-    // Send initial status to new viewer
-    ws.send(JSON.stringify({ status: cameraSocket ? 'cam_online' : 'cam_offline' }));
+    hub.viewers.add(ws);
+    console.log(`[+] Dashboard Viewer Connected for Hub: ${pairId}`);
+    ws.send(JSON.stringify({ status: hub.camSocket ? 'cam_online' : 'cam_offline' }));
   }
 
-  // Handle incoming data
   ws.on('message', (data) => {
-    if (ws === cameraSocket) {
-      // Forward binary JPEG frames to all dashboard viewers
-      for (const viewer of viewers) {
+    if (ws === hub.camSocket) {
+      for (const viewer of hub.viewers) {
         if (viewer.readyState === WebSocket.OPEN) {
           viewer.send(data);
         }
@@ -37,20 +44,18 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  // Handle disconnects cleanly
   ws.on('close', () => {
-    if (ws === cameraSocket) {
-      cameraSocket = null;
-      console.log('[-] ESP32-CAM Disconnected');
-      // Broadcast offline status to all viewers immediately
-      for (const viewer of viewers) {
+    if (ws === hub.camSocket) {
+      hub.camSocket = null;
+      console.log(`[-] ESP32-CAM Disconnected for Hub: ${pairId}`);
+      for (const viewer of hub.viewers) {
         if (viewer.readyState === WebSocket.OPEN) {
           viewer.send(JSON.stringify({ status: 'cam_offline' }));
         }
       }
     } else {
-      viewers.delete(ws);
-      console.log('[-] Viewer Disconnected');
+      hub.viewers.delete(ws);
+      console.log(`[-] Viewer Disconnected from Hub: ${pairId}`);
     }
   });
 
