@@ -12,14 +12,23 @@ wss.on('connection', (ws, req) => {
   if (role === 'cam') {
     cameraSocket = ws;
     console.log('[+] ESP32-CAM Connected');
+    // Notify all viewers that camera is now online
+    for (const viewer of viewers) {
+      if (viewer.readyState === WebSocket.OPEN) {
+        viewer.send(JSON.stringify({ status: 'cam_online' }));
+      }
+    }
   } else {
     viewers.add(ws);
     console.log('[+] Dashboard Viewer Connected');
+    // Send initial status to new viewer
+    ws.send(JSON.stringify({ status: cameraSocket ? 'cam_online' : 'cam_offline' }));
   }
 
-  // Handle incoming binary frames from ESP32 and relay to viewers
+  // Handle incoming data
   ws.on('message', (data) => {
     if (ws === cameraSocket) {
+      // Forward binary JPEG frames to all dashboard viewers
       for (const viewer of viewers) {
         if (viewer.readyState === WebSocket.OPEN) {
           viewer.send(data);
@@ -33,6 +42,12 @@ wss.on('connection', (ws, req) => {
     if (ws === cameraSocket) {
       cameraSocket = null;
       console.log('[-] ESP32-CAM Disconnected');
+      // Broadcast offline status to all viewers immediately
+      for (const viewer of viewers) {
+        if (viewer.readyState === WebSocket.OPEN) {
+          viewer.send(JSON.stringify({ status: 'cam_offline' }));
+        }
+      }
     } else {
       viewers.delete(ws);
       console.log('[-] Viewer Disconnected');
