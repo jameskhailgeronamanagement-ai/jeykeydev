@@ -17,6 +17,7 @@ wss.on('connection', (ws, req) => {
     console.log('[+] Dashboard Viewer Connected');
   }
 
+  // Handle incoming binary frames from ESP32 and relay to viewers
   ws.on('message', (data) => {
     if (ws === cameraSocket) {
       for (const viewer of viewers) {
@@ -27,6 +28,7 @@ wss.on('connection', (ws, req) => {
     }
   });
 
+  // Handle disconnects cleanly
   ws.on('close', () => {
     if (ws === cameraSocket) {
       cameraSocket = null;
@@ -35,6 +37,10 @@ wss.on('connection', (ws, req) => {
       viewers.delete(ws);
       console.log('[-] Viewer Disconnected');
     }
+  });
+
+  ws.on('error', (err) => {
+    console.error('[!] WebSocket error:', err.message);
   });
 });
 
