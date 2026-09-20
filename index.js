@@ -23,6 +23,12 @@ wss.on('connection', (ws, req) => {
   if (role === 'cam') {
     hub.camSocket = ws;
     console.log(`[+] ESP32-CAM Connected for Hub: ${pairId}`);
+    
+    // If viewers are already waiting, tell the camera to start streaming immediately
+    if (hub.viewers.size > 0 && hub.camSocket.readyState === WebSocket.OPEN) {
+      hub.camSocket.send("START_STREAM");
+    }
+
     for (const viewer of hub.viewers) {
       if (viewer.readyState === WebSocket.OPEN) {
         viewer.send(JSON.stringify({ status: 'cam_online' }));
@@ -31,6 +37,13 @@ wss.on('connection', (ws, req) => {
   } else {
     hub.viewers.add(ws);
     console.log(`[+] Dashboard Viewer Connected for Hub: ${pairId}`);
+    
+    // --- SIGNALS: Tell camera to start streaming because a viewer joined ---
+    if (hub.viewers.size === 1 && hub.camSocket && hub.camSocket.readyState === WebSocket.OPEN) {
+      hub.camSocket.send("START_STREAM");
+      console.log(`[->] Sent START_STREAM to camera for Hub: ${pairId}`);
+    }
+
     ws.send(JSON.stringify({ status: hub.camSocket ? 'cam_online' : 'cam_offline' }));
   }
 
@@ -56,6 +69,12 @@ wss.on('connection', (ws, req) => {
     } else {
       hub.viewers.delete(ws);
       console.log(`[-] Viewer Disconnected from Hub: ${pairId}`);
+
+      // --- SIGNALS: If no viewers are left, pause camera stream to save bandwidth ---
+      if (hub.viewers.size === 0 && hub.camSocket && hub.camSocket.readyState === WebSocket.OPEN) {
+        hub.camSocket.send("STOP_STREAM");
+        console.log(`[->] Sent STOP_STREAM to camera for Hub: ${pairId}`);
+      }
     }
   });
 
