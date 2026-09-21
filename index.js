@@ -1,6 +1,15 @@
 const WebSocket = require('ws');
+const http = require('http');
 const PORT = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port: PORT });
+
+// Create a standard HTTP server to handle UptimeRobot health-check pings
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('E-Baboyan Relay Server is Alive\n');
+});
+
+// Attach the WebSocket server to the same HTTP server instance
+const wss = new WebSocket.Server({ server });
 
 // Store cameras and viewers mapped by pair_id
 const hubs = new Map(); // pair_id -> { camSocket: ws, viewers: Set }
@@ -38,7 +47,7 @@ wss.on('connection', (ws, req) => {
     hub.viewers.add(ws);
     console.log(`[+] Dashboard Viewer Connected for Hub: ${pairId}`);
     
-    // --- SIGNALS: Tell camera to start streaming because a viewer joined ---
+    // Tell camera to start streaming because a viewer joined
     if (hub.viewers.size === 1 && hub.camSocket && hub.camSocket.readyState === WebSocket.OPEN) {
       hub.camSocket.send("START_STREAM");
       console.log(`[->] Sent START_STREAM to camera for Hub: ${pairId}`);
@@ -70,7 +79,7 @@ wss.on('connection', (ws, req) => {
       hub.viewers.delete(ws);
       console.log(`[-] Viewer Disconnected from Hub: ${pairId}`);
 
-      // --- SIGNALS: If no viewers are left, pause camera stream to save bandwidth ---
+      // If no viewers are left, pause camera stream to save bandwidth
       if (hub.viewers.size === 0 && hub.camSocket && hub.camSocket.readyState === WebSocket.OPEN) {
         hub.camSocket.send("STOP_STREAM");
         console.log(`[->] Sent STOP_STREAM to camera for Hub: ${pairId}`);
@@ -83,4 +92,6 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log(`WebSocket Relay Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`HTTP and WebSocket Relay Server running on port ${PORT}`);
+});
