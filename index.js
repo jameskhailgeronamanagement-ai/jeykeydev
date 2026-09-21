@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 8080;
 // Create a standard HTTP server to handle UptimeRobot health-check pings
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('E-Baboyan Relay Server is Alive\n');
+  res.end('E-Baboyan Relay Server is up and running v1.0\n');
 });
 
 // Attach the WebSocket server to the same HTTP server instance
