@@ -2,10 +2,49 @@ const WebSocket = require('ws');
 const http = require('http');
 const PORT = process.env.PORT || 8080;
 
-// Create a standard HTTP server to handle UptimeRobot health-check pings
+// Create a standard HTTP server to handle UptimeRobot pings and browser landing page visits
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('E-Baboyan Relay Server is up and running v1.0\n');
+  // If someone visits the root URL via a web browser, serve a proper HTML page
+  if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`
+      <!DOCTYPE html>
+      <html lang="en" class="h-full bg-[#080c14]">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>E-Baboyan Relay Server</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+          <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+          <style>
+              body { font-family: 'Plus Jakarta Sans', sans-serif; }
+              .glass { background: linear-gradient(135deg, rgba(17, 24, 39, 0.9) 0%, rgba(11, 15, 25, 0.95) 100%); border: 1px solid rgba(255, 255, 255, 0.05); }
+          </style>
+      </head>
+      <body class="h-full flex items-center justify-center text-slate-200 antialiased p-4">
+          <div class="glass max-w-md w-full p-8 rounded-3xl text-center shadow-2xl relative overflow-hidden">
+              <div class="absolute -top-16 -right-16 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
+              <div class="h-14 w-14 rounded-2xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto mb-4 text-xl">
+                  <i class="fa-solid fa-server"></i>
+              </div>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-3">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Relay Node Active
+              </span>
+              <h1 class="text-xl font-bold text-white mb-1">E-Baboyan WebSocket Hub</h1>
+              <p class="text-xs text-slate-400 mb-6">ESP32-CAM live video relay backend is up and running successfully.</p>
+              <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 font-mono">
+                Status: Online & Ready for Connections
+              </div>
+          </div>
+      </body>
+      </html>
+    `);
+  } else {
+    // Fallback plain text response for standard health check pings (like UptimeRobot)
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('E-Baboyan Relay Server is up and running v1.0\n');
+  }
 });
 
 // Attach the WebSocket server to the same HTTP server instance
