@@ -15,8 +15,65 @@ const stats = {
 // Store cameras and viewers mapped by pair_id
 const hubs = new Map(); // pair_id -> { camSocket: ws, viewers: Set }
 
-// Create HTTP server for UptimeRobot health checks and status stats
-const server = http.createServer((req, res) => {
+// Create HTTP server for UptimeRobot health checks, status stats, and AI proxy inference
+const server = http.createServer(async (req, res) => {
+  // --- HANDLE AI INFERENCE PROXIED REQUEST FROM HOSTINGER DASHBOARD ---
+  if (req.method === 'POST' && req.url === '/api/detect') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const parsedBody = JSON.parse(body);
+        if (!parsedBody.image) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No image provided' }));
+          return;
+        }
+
+        // Forward request securely to Roboflow Workflow endpoint
+        const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/chat?workflowUrl=swine-detection-v2-vswine-detection-v2-1-rfdetr-small-t1-logic&api_key=HKoaSwKINbyvu1s6J57h', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inputs: {
+              image: {
+                type: 'base64',
+                value: parsedBody.image
+              }
+            }
+          })
+        });
+
+        const roboflowData = await roboflowRes.json();
+        
+        res.writeHead(roboflowRes.status, { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*' // Allow your Hostinger frontend
+        });
+        res.end(JSON.stringify(roboflowData));
+      } catch (err) {
+        console.error('Inference Proxy Error:', err.message);
+        res.writeHead(500, { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*' 
+        });
+        res.end(JSON.stringify({ error: 'Failed to process AI inference: ' + err.message }));
+      }
+    });
+    return;
+  }
+
+  // --- HANDLE CORS PREFLIGHT OPTIONS ---
+  if (req.method === 'OPTIONS' && req.url === '/api/detect') {
+    res.writeHead(200, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    });
+    res.end();
+    return;
+  }
+
   if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(`
