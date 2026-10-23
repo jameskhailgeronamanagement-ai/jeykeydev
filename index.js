@@ -203,7 +203,7 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ status: hub.camSocket ? 'cam_online' : 'cam_offline' }));
   }
 
-  // Handle binary data routing, throttle-intercept for AI, and viewer broadcasts
+  // Handle binary data routing, throttling/intercepting for AI, and viewer broadcasts
   ws.on('message', async (data) => {
     if (ws === hub.camSocket) {
       stats.bytesIn += data.length || data.byteLength || 0;
@@ -216,10 +216,10 @@ wss.on('connection', (ws, req) => {
         lastInferenceTimes.set(pairId, now);
         
         try {
-          // Convert incoming binary JPEG buffer to base64
+          // Convert incoming binary frame buffer to base64
           const base64Image = Buffer.from(data).toString('base64');
 
-          // Send intercepted frame to your Roboflow Workflow endpoint
+          // Send via JavaScript Fetch to Roboflow Serverless Cloud API Workflow
           const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/chat?workflowUrl=swine-detection-v2-vswine-detection-v2-1-rfdetr-small-t1-logic&api_key=HKoaSwKINbyvu1s6J57h', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
