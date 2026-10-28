@@ -14,6 +14,7 @@ const stats = {
 
 // Store cameras and viewers mapped by pair_id
 const hubs = new Map(); // pair_id -> { camSocket: ws, viewers: Set }
+const lastInferenceTimes = new Map(); // pair_id -> timestamp for throttling AI calls
 
 // Create HTTP server for UptimeRobot health checks, status stats, and AI proxy inference
 const server = http.createServer(async (req, res) => {
@@ -202,11 +203,54 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ status: hub.camSocket ? 'cam_online' : 'cam_offline' }));
   }
 
-  // Handle binary data routing with zero-delay broadcast
-  ws.on('message', (data) => {
+  // Handle binary data routing, throttling/intercepting for AI, and viewer broadcasts
+  ws.on('message', async (data) => {
     if (ws === hub.camSocket) {
       stats.bytesIn += data.length || data.byteLength || 0;
       
+      // --- SERVER-SIDE FRAME INTERCEPTION FOR ROBOTOFLOW WORKFLOW ---
+      const now = Date.now();
+      const lastInference = lastInferenceTimes.get(pairId) || 0;
+      
+      if (now - lastInference > 1500) { // Throttle: run AI inference every 1.5 seconds
+        lastInferenceTimes.set(pairId, now);
+        
+        try {
+          // Convert incoming binary frame buffer to base64
+          const base64Image = Buffer.from(data).toString('base64');
+
+          // Send via JavaScript Fetch to Roboflow Serverless Cloud API Workflow
+          const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/chat?workflowUrl=swine-detection-v2-vswine-detection-v2-1-rfdetr-small-t1-logic&api_key=HKoaSwKINbyvu1s6J57h', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              inputs: {
+                image: {
+                  type: 'base64',
+                  value: base64Image
+                }
+              }
+            })
+          });
+
+          const roboflowData = await roboflowRes.json();
+
+          // Broadcast the AI bounding box results to all connected dashboard viewers
+          for (const viewer of hub.viewers) {
+            if (viewer.readyState === WebSocket.OPEN) {
+              viewer.send(JSON.stringify({
+                type: 'ai_predictions',
+                predictions: roboflowData
+              }));
+            }
+          }
+        } catch (err) {
+          console.error('[!] Server-side Intercept Inference Error:', err.message);
+        }
+      }
+      // -------------------------------------------------------------
+
+      // --- FORWARD NORMAL VIDEO STREAM TO VIEWERS ---
       for (const viewer of hub.viewers) {
         if (viewer.readyState === WebSocket.OPEN) {
           viewer.send(data, { binary: true }, (err) => {
@@ -246,7 +290,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-// Periodic ping interval to keep Render sockets active and drop dead connections
+// Periodic ping interval to keep Render/Railway sockets active and drop dead connections
 const interval = setInterval(() => {
   wss.clients.forEach((ws) => {
     if (ws.isAlive === false) return ws.terminate();
