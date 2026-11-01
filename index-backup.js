@@ -31,18 +31,12 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // Forward request securely to Roboflow Workflow endpoint
-        const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/chat?workflowUrl=swine-detection-v2-vswine-detection-v2-1-rfdetr-small-t1-logic&api_key=HKoaSwKINbyvu1s6J57h', {
+        // Forward request directly to Roboflow Inference API (Updated Endpoint)
+        const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            inputs: {
-              image: {
-                type: 'base64',
-                value: parsedBody.image
-              }
-            }
-          })
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          // Sending raw base64 string exactly as requested
+          body: parsedBody.image
         });
 
         const roboflowData = await roboflowRes.json();
@@ -208,7 +202,7 @@ wss.on('connection', (ws, req) => {
     if (ws === hub.camSocket) {
       stats.bytesIn += data.length || data.byteLength || 0;
       
-      // --- SERVER-SIDE FRAME INTERCEPTION FOR ROBOTOFLOW WORKFLOW ---
+      // --- SERVER-SIDE FRAME INTERCEPTION FOR ROBOFLOW INFERENCE ---
       const now = Date.now();
       const lastInference = lastInferenceTimes.get(pairId) || 0;
       
@@ -219,18 +213,12 @@ wss.on('connection', (ws, req) => {
           // Convert incoming binary frame buffer to base64
           const base64Image = Buffer.from(data).toString('base64');
 
-          // Send via JavaScript Fetch to Roboflow Serverless Cloud API Workflow
-          const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/chat?workflowUrl=swine-detection-v2-vswine-detection-v2-1-rfdetr-small-t1-logic&api_key=HKoaSwKINbyvu1s6J57h', {
+          // Forward request directly to Roboflow Inference API (Updated Endpoint)
+          const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              inputs: {
-                image: {
-                  type: 'base64',
-                  value: base64Image
-                }
-              }
-            })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            // Sending raw base64 string exactly as requested
+            body: base64Image
           });
 
           const roboflowData = await roboflowRes.json();
