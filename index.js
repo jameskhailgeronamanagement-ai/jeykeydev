@@ -31,7 +31,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // Forward request directly to Roboflow Inference API (Updated Endpoint)
+        // Forward request directly to Roboflow Inference API
         const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -154,12 +154,15 @@ wss.on('connection', (ws, req) => {
 
   const urlParams = new URLSearchParams(req.url.split('?')[1]);
   const role = urlParams.get('role');
-  const pairId = urlParams.get('pair_id');
+  const rawPairId = urlParams.get('pair_id');
 
-  if (!pairId) {
+  if (!rawPairId) {
     ws.close();
     return;
   }
+  
+  // Force uppercase to prevent duplicate ghosts (e.g., 'hub-1' vs 'HUB-1')
+  const pairId = rawPairId.toUpperCase(); 
 
   if (!hubs.has(pairId)) {
     hubs.set(pairId, { camSocket: null, viewers: new Set() });
@@ -213,7 +216,7 @@ wss.on('connection', (ws, req) => {
           // Convert incoming binary frame buffer to base64
           const base64Image = Buffer.from(data).toString('base64');
 
-          // Forward request directly to Roboflow Inference API (Updated Endpoint)
+          // Forward request directly to Roboflow Inference API
           const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -270,6 +273,14 @@ wss.on('connection', (ws, req) => {
         console.log(`[->] Sent STOP_STREAM to camera for Hub: ${pairId}`);
       }
     }
+
+    // Delete the hub from memory if it is completely empty
+    if (!hub.camSocket && hub.viewers.size === 0) {
+      hubs.delete(pairId);
+      console.log(`[!] Hub ${pairId} is completely empty. Removed from memory.`);
+    }
+
+    // Update active hubs stat accurately
     stats.activeHubs = hubs.size;
   });
 
