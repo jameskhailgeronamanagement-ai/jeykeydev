@@ -32,7 +32,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Forward request directly to Roboflow Inference API
-        const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
+        const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/3?api_key=HKoaSwKINbyvu1s6J57h', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           // Sending raw base64 string exactly as requested
@@ -217,7 +217,7 @@ wss.on('connection', (ws, req) => {
           const base64Image = Buffer.from(data).toString('base64');
 
           // Forward request directly to Roboflow Inference API
-          const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
+          const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/3?api_key=HKoaSwKINbyvu1s6J57h', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             // Sending raw base64 string exactly as requested
