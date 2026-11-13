@@ -31,12 +31,18 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // Forward request directly to Roboflow Inference API
-        const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/3?api_key=HKoaSwKINbyvu1s6J57h', {
+        // Forward request directly to Roboflow NAS Serverless Workflow
+        const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/swine-detection-v2-3-rfdetr-nas-t1-a5e262-vswine-detection-v2-3-rfdetr-nas-t1-a5e262-logic', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          // Sending raw base64 string exactly as requested
-          body: parsedBody.image
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer HKoaSwKINbyvu1s6J57h'
+          },
+          body: JSON.stringify({
+            inputs: {
+              "image": { "type": "base64", "value": parsedBody.image }
+            }
+          })
         });
 
         const roboflowData = await roboflowRes.json();
@@ -63,7 +69,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     });
     res.end();
     return;
@@ -216,12 +222,18 @@ wss.on('connection', (ws, req) => {
           // Convert incoming binary frame buffer to base64
           const base64Image = Buffer.from(data).toString('base64');
 
-          // Forward request directly to Roboflow Inference API
-          const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/3?api_key=HKoaSwKINbyvu1s6J57h', {
+          // Forward request directly to Roboflow Serverless Workflow API
+          const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/swine-detection-v2-3-rfdetr-nas-t1-a5e262-vswine-detection-v2-3-rfdetr-nas-t1-a5e262-logic', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            // Sending raw base64 string exactly as requested
-            body: base64Image
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer HKoaSwKINbyvu1s6J57h'
+            },
+            body: JSON.stringify({
+              inputs: {
+                "image": { "type": "base64", "value": base64Image }
+              }
+            })
           });
 
           const roboflowData = await roboflowRes.json();
