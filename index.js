@@ -32,7 +32,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Forward request directly to Roboflow NAS Serverless Workflow
-        const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/swine-detection-v2-3-rfdetr-nas-t1-a5e262-vswine-detection-v2-3-rfdetr-nas-t1-a5e262-logic', {
+        const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/swine-detection-v2-4-rfdetr-nas-base-t1-96ff59-vswine-detection-v2-4-rfdetr-nas-base-t1-96ff59-logic', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -223,7 +223,7 @@ wss.on('connection', (ws, req) => {
           const base64Image = Buffer.from(data).toString('base64');
 
           // Forward request directly to Roboflow Serverless Workflow API
-          const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/swine-detection-v2-3-rfdetr-nas-t1-a5e262-vswine-detection-v2-3-rfdetr-nas-t1-a5e262-logic', {
+          const roboflowRes = await fetch('https://serverless.roboflow.com/jeykey-dev/workflows/swine-detection-v2-4-rfdetr-nas-base-t1-96ff59-vswine-detection-v2-4-rfdetr-nas-base-t1-96ff59-logic', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
