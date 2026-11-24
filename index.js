@@ -206,60 +206,93 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ status: hub.camSocket ? 'cam_online' : 'cam_offline' }));
   }
 
-  // Handle binary data routing, throttling/intercepting for AI, and viewer broadcasts
-  ws.on('message', async (data) => {
-    if (ws === hub.camSocket) {
-      stats.bytesIn += data.length || data.byteLength || 0;
-      
-      // --- SERVER-SIDE FRAME INTERCEPTION FOR ROBOFLOW INFERENCE ---
-      const now = Date.now();
-      const lastInference = lastInferenceTimes.get(pairId) || 0;
-      
-      if (now - lastInference > 1500) { // Throttle: run AI inference every 1.5 seconds
-        lastInferenceTimes.set(pairId, now);
-        
-        try {
-          // Convert incoming binary frame buffer to base64
-          const base64Image = Buffer.from(data).toString('base64');
-
-          // Forward request directly to updated Roboflow Serverless Workflow API
-          const roboflowRes = await fetch('https://serverless.roboflow.com/james-khail-gerona/workflows/swine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-vswine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-logic', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer tay1gBs9qBefy5sYS2AD'
-            },
-            body: JSON.stringify({
-              inputs: {
-                "image": { "type": "base64", "value": base64Image }
-              }
-            })
-          });
-
-          const roboflowData = await roboflowRes.json();
-
-          // Broadcast the AI bounding box results to all connected dashboard viewers
-          for (const viewer of hub.viewers) {
-            if (viewer.readyState === WebSocket.OPEN) {
-              viewer.send(JSON.stringify({
-                type: 'ai_predictions',
-                predictions: roboflowData
-              }));
-            }
+  // Handle commands from viewers and binary data routing from ESP32-CAM
+  ws.on('message', async (data, isBinary) => {
+    // --- A. COMMANDS FROM DASHBOARD VIEWER TO CAMERA ---
+    if (ws !== hub.camSocket && !isBinary) {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'CAPTURE_HD') {
+          if (hub.camSocket && hub.camSocket.readyState === WebSocket.OPEN) {
+            hub.camSocket.send('CAPTURE_HD');
+            console.log(`[->] Sent CAPTURE_HD command to camera for Hub: ${pairId}`);
+          } else {
+            ws.send(JSON.stringify({
+              type: 'hd_error',
+              message: 'Camera is offline or not connected to relay.'
+            }));
           }
-        } catch (err) {
-          console.error('[!] Server-side Intercept Inference Error:', err.message);
+        }
+      } catch (err) {
+        console.error('[!] Invalid JSON command from viewer:', err.message);
+      }
+      return;
+    }
+
+    // --- B. BINARY FRAMES FROM ESP32-CAM TO VIEWERS ---
+    if (ws === hub.camSocket) {
+      const frameBuffer = Buffer.from(data);
+      stats.bytesIn += frameBuffer.length;
+      if (frameBuffer.length < 2) return;
+
+      let frameType = frameBuffer[0];
+      let jpegBuffer = frameBuffer.subarray(1);
+
+      // Fallback if untagged raw JPEG (0xFF 0xD8) is sent before firmware tag update
+      if (frameBuffer[0] === 0xFF && frameBuffer[1] === 0xD8) {
+        frameType = 0x01;
+        jpegBuffer = frameBuffer;
+      }
+
+      // Run throttled Roboflow AI inference only on normal stream frames (0x01)
+      if (frameType === 0x01) {
+        const now = Date.now();
+        const lastInference = lastInferenceTimes.get(pairId) || 0;
+        
+        if (now - lastInference > 1500) { // Throttle: run AI inference every 1.5 seconds
+          lastInferenceTimes.set(pairId, now);
+          
+          try {
+            const base64Image = jpegBuffer.toString('base64');
+
+            // Forward request directly to updated Roboflow Serverless Workflow API
+            const roboflowRes = await fetch('https://serverless.roboflow.com/james-khail-gerona/workflows/swine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-vswine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-logic', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer tay1gBs9qBefy5sYS2AD'
+              },
+              body: JSON.stringify({
+                inputs: {
+                  "image": { "type": "base64", "value": base64Image }
+                }
+              })
+            });
+
+            const roboflowData = await roboflowRes.json();
+
+            // Broadcast the AI bounding box results to all connected dashboard viewers
+            for (const viewer of hub.viewers) {
+              if (viewer.readyState === WebSocket.OPEN) {
+                viewer.send(JSON.stringify({
+                  type: 'ai_predictions',
+                  predictions: roboflowData
+                }));
+              }
+            }
+          } catch (err) {
+            console.error('[!] Server-side Intercept Inference Error:', err.message);
+          }
         }
       }
-      // -------------------------------------------------------------
 
-      // --- FORWARD NORMAL VIDEO STREAM TO VIEWERS ---
+      // Forward binary frame (0x01 stream or 0x02 single HD capture) to viewers
       for (const viewer of hub.viewers) {
         if (viewer.readyState === WebSocket.OPEN) {
-          viewer.send(data, { binary: true }, (err) => {
+          viewer.send(frameBuffer, { binary: true }, (err) => {
             if (err) console.error('[!] Send error:', err.message);
           });
-          stats.bytesOut += data.length || data.byteLength || 0;
+          stats.bytesOut += frameBuffer.length;
         }
       }
     }
