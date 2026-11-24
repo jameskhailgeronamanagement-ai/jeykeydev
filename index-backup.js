@@ -31,12 +31,18 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // Forward request directly to Roboflow Inference API (Updated Endpoint)
-        const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
+        // Forward request directly to updated Roboflow NAS Serverless Workflow
+        const roboflowRes = await fetch('https://serverless.roboflow.com/james-khail-gerona/workflows/swine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-vswine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-logic', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          // Sending raw base64 string exactly as requested
-          body: parsedBody.image
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer tay1gBs9qBefy5sYS2AD'
+          },
+          body: JSON.stringify({
+            inputs: {
+              "image": { "type": "base64", "value": parsedBody.image }
+            }
+          })
         });
 
         const roboflowData = await roboflowRes.json();
@@ -63,7 +69,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     });
     res.end();
     return;
@@ -154,12 +160,15 @@ wss.on('connection', (ws, req) => {
 
   const urlParams = new URLSearchParams(req.url.split('?')[1]);
   const role = urlParams.get('role');
-  const pairId = urlParams.get('pair_id');
+  const rawPairId = urlParams.get('pair_id');
 
-  if (!pairId) {
+  if (!rawPairId) {
     ws.close();
     return;
   }
+  
+  // Force uppercase to prevent duplicate ghosts (e.g., 'hub-1' vs 'HUB-1')
+  const pairId = rawPairId.toUpperCase(); 
 
   if (!hubs.has(pairId)) {
     hubs.set(pairId, { camSocket: null, viewers: new Set() });
@@ -213,12 +222,18 @@ wss.on('connection', (ws, req) => {
           // Convert incoming binary frame buffer to base64
           const base64Image = Buffer.from(data).toString('base64');
 
-          // Forward request directly to Roboflow Inference API (Updated Endpoint)
-          const roboflowRes = await fetch('https://detect.roboflow.com/swine-detection-v2/2?api_key=HKoaSwKINbyvu1s6J57h', {
+          // Forward request directly to updated Roboflow Serverless Workflow API
+          const roboflowRes = await fetch('https://serverless.roboflow.com/james-khail-gerona/workflows/swine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-vswine-dectection-v5-1-rfdetr-nas-base-t1-89efa6-logic', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            // Sending raw base64 string exactly as requested
-            body: base64Image
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer tay1gBs9qBefy5sYS2AD'
+            },
+            body: JSON.stringify({
+              inputs: {
+                "image": { "type": "base64", "value": base64Image }
+              }
+            })
           });
 
           const roboflowData = await roboflowRes.json();
@@ -270,6 +285,14 @@ wss.on('connection', (ws, req) => {
         console.log(`[->] Sent STOP_STREAM to camera for Hub: ${pairId}`);
       }
     }
+
+    // Delete the hub from memory if it is completely empty
+    if (!hub.camSocket && hub.viewers.size === 0) {
+      hubs.delete(pairId);
+      console.log(`[!] Hub ${pairId} is completely empty. Removed from memory.`);
+    }
+
+    // Update active hubs stat accurately
     stats.activeHubs = hubs.size;
   });
 
